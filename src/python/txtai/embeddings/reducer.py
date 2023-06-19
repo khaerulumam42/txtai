@@ -12,8 +12,6 @@ try:
 except ImportError:
     REDUCER = False
 
-from .. import __pickle__
-
 
 class Reducer:
     """
@@ -28,9 +26,6 @@ class Reducer:
             embeddings: input embeddings matrix
             components: number of model components
         """
-
-        if not REDUCER:
-            raise ImportError('Dimensionality reduction is not available - install "similarity" extra to enable')
 
         self.model = self.build(embeddings, components) if embeddings is not None and components else None
 
@@ -85,7 +80,7 @@ class Reducer:
         """
 
         # Dimensionality reduction
-        with open(path, "rb") as handle:
+        with open("%s/lsa" % path, "rb") as handle:
             self.model = pickle.load(handle)
 
     def save(self, path):
@@ -96,5 +91,5 @@ class Reducer:
             path: directory path to save model
         """
 
-        with open(path, "wb") as handle:
-            pickle.dump(self.model, handle, protocol=__pickle__)
+        with open("%s/lsa" % path, "wb") as handle:
+            pickle.dump(self.model, handle, protocol=pickle.HIGHEST_PROTOCOL)

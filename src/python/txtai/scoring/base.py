@@ -7,38 +7,21 @@ import pickle
 
 from collections import Counter
 
-from .. import __pickle__
-
-from ..pipeline import Tokenizer
-
 
 class Scoring:
     """
-    Base scoring. Uses term frequency-inverse document frequency (TF-IDF).
+    Base scoring object. Default method scores documents using TF-IDF.
     """
 
-    def __init__(self, config=None):
+    def __init__(self):
         """
         Initializes backing statistic objects.
-
-        Args:
-            config: input configuration
         """
-
-        # Scoring configuration
-        self.config = config if config else {}
 
         # Document stats
         self.total = 0
         self.tokens = 0
         self.avgdl = 0
-
-        # Document data
-        self.documents = {} if self.config.get("content") else None
-        self.docterms = {} if self.config.get("terms") else None
-
-        # Normalize scores
-        self.normalize = self.config.get("normalize")
 
         # Word frequency
         self.docfreq = Counter()
@@ -57,65 +40,14 @@ class Scoring:
         Indexes a collection of documents using a scoring method.
 
         Args:
-            documents: list of (id, dict|text|tokens, tags)
+            documents: list of (id, text|tokens, tags)
         """
-
-        # Parse documents
-        tokenlists = self.parse(documents)
-
-        # Build index if tokens parsed
-        if self.wordfreq:
-            # Calculate total token frequency
-            self.tokens = sum(self.wordfreq.values())
-
-            # Calculate average frequency per token
-            self.avgfreq = self.tokens / len(self.wordfreq.values())
-
-            # Calculate average document length in tokens
-            self.avgdl = self.tokens / self.total
-
-            # Compute IDF scores
-            for word, freq in self.docfreq.items():
-                self.idf[word] = self.computeidf(freq)
-
-            # Average IDF score per token
-            self.avgidf = sum(self.idf.values()) / len(self.idf)
-
-            # Filter for tags that appear in at least 1% of the documents
-            self.tags = {tag: number for tag, number in self.tags.items() if number >= self.total * 0.005}
-
-            # Process document terms, if necessary
-            self.terms(tokenlists)
-
-    def parse(self, documents):
-        """
-        Parses document stats, word frequencies and data from documents.
-
-        Args:
-            docments: list of (id, dict|text|tokens, tags)
-
-        Returns:
-            tokenlists: list of parsed documents when term parsing is enabled, empty dict otherwise
-        """
-
-        # Store tokenlists when term indexing enabled
-        tokenlists = {}
 
         # Calculate word frequency, total tokens and total documents
-        for uid, data, tags in documents:
-            if self.documents is not None:
-                self.documents[uid] = data
-
-            # Extract text, if necessary
-            if isinstance(data, dict):
-                data = data.get("text")
-
-            # Convert to tokens, if necessary
-            tokens = Tokenizer.tokenize(data) if isinstance(data, str) else data
-
-            # Save tokens for term indexing
-            if self.docterms is not None:
-                tokenlists[uid] = tokens
+        for _, tokens, tags in documents:
+            # Convert to tokens if necessary
+            if isinstance(tokens, str):
+                tokens = Tokenizer.tokenize(tokens)
 
             # Total number of times token appears, count all tokens
             self.wordfreq.update(tokens)
@@ -130,32 +62,31 @@ class Scoring:
             # Total document count
             self.total += 1
 
-        return tokenlists
+        # Calculate total token frequency
+        self.tokens = sum(self.wordfreq.values())
 
-    def terms(self, tokenlist):
-        """
-        Add term weights for each tokenized document in tokenlist.
+        # Calculate average frequency per token
+        self.avgfreq = self.tokens / len(self.wordfreq.values())
 
-        Args:
-            tokenlist: list of tokenized documents
-        """
+        # Calculate average document length in tokens
+        self.avgdl = self.tokens / self.total
 
-        for uid in tokenlist:
-            tokens = tokenlist[uid]
-            weights = self.weights(tokens)
+        # Compute IDF scores
+        for word, freq in self.docfreq.items():
+            self.idf[word] = self.computeIDF(freq)
 
-            for x, token in enumerate(tokens):
-                if token not in self.docterms:
-                    self.docterms[token] = {}
+        # Average IDF score per token
+        self.avgidf = sum(self.idf.values()) / len(self.idf)
 
-                self.docterms[token][uid] = weights[x]
+        # Filter for tags that appear in at least 1% of the documents
+        self.tags = {tag: number for tag, number in self.tags.items() if number >= self.total * 0.005}
 
-    def weights(self, tokens):
+    def weights(self, document):
         """
         Builds weight vector for each token in the input token.
 
         Args:
-            tokens: input tokens
+            document: (id, tokens, tags)
 
         Returns:
             list of weights for each token
@@ -164,18 +95,19 @@ class Scoring:
         # Weights array
         weights = []
 
+        # Unpack document
+        _, tokens, _ = document
+
         # Document length
         length = len(tokens)
 
-        # Calculate token counts
-        freq = self.computefreq(tokens)
-
         for token in tokens:
-            # Lookup idf score
+            # Lookup frequency and idf score - default to averages if not in repository
+            freq = self.wordfreq[token] if token in self.wordfreq else self.avgfreq
             idf = self.idf[token] if token in self.idf else self.avgidf
 
             # Calculate score for each token, use as weight
-            weights.append(self.score(freq[token], idf, length))
+            weights.append(self.score(freq, idf, length))
 
         # Boost weights of tag tokens to match the largest weight in the list
         if self.tags:
@@ -188,107 +120,15 @@ class Scoring:
 
         return weights
 
-    def search(self, query, limit=3):
-        """
-        Search index for documents matching query. Request terms config parameter to be enabled.
-
-        Args:
-            query: input query
-            limit: maximum results
-
-        Returns:
-            list of (id, score) or (data, score) if content is enabled
-        """
-
-        # Check if document terms available
-        if self.docterms:
-            query = Tokenizer.tokenize(query) if isinstance(query, str) else query
-
-            scores = {}
-            for token in query:
-                if token in self.docterms:
-                    for x in self.docterms[token]:
-                        if x not in scores:
-                            scores[x] = 0.0
-
-                        scores[x] += self.docterms[token][x]
-
-            # Get topn matching results
-            topn = self.topn(scores, limit)
-
-            # Format results and add content if available
-            return self.results(topn)
-
-        return None
-
-    def topn(self, scores, limit):
-        """
-        Extracts topn search results.
-
-        Args:
-            scores: all scores
-            limit: maximum results
-
-        Returns:
-            topn results
-        """
-
-        # Sort and get topn results
-        scores = sorted(scores.items(), key=lambda x: x[1], reverse=True)[:limit]
-
-        # Normalize scores, if enabled
-        if self.normalize:
-            # Calculate max score = 4 * average score
-            maxscore = 4 * self.score(self.avgfreq, self.avgidf, self.avgdl)
-
-            # Normalize scores between 0 - 1 using maxscore
-            scores = [(x, min(score / maxscore, 1.0)) for x, score in scores]
-
-        return scores
-
-    def results(self, topn):
-        """
-        Resolves a list of (id, score) with document content, if available. Otherwise, the original input is returned.
-
-        Args:
-            topn: list of (id, score)
-
-        Returns:
-            resolved results
-        """
-
-        if self.documents:
-            results = []
-            for x, score in topn:
-                data = self.documents[x]
-                if isinstance(data, dict):
-                    results.append({"id": x, "text": data.get("text"), "score": score, "data": data})
-                else:
-                    results.append({"id": x, "text": data, "score": score})
-
-            return results
-
-        return topn
-
-    def count(self):
-        """
-        Returns the total number of documents indexed.
-
-        Returns:
-            total number of documents indexed
-        """
-
-        return self.total
-
     def load(self, path):
         """
         Loads a saved Scoring object from path.
 
         Args:
-            path: directory path to load scoring index
+            path: directory path to load model
         """
 
-        with open(path, "rb") as handle:
+        with open("%s/scoring" % path, "rb") as handle:
             self.__dict__.update(pickle.load(handle))
 
     def save(self, path):
@@ -296,26 +136,13 @@ class Scoring:
         Saves a Scoring object to path.
 
         Args:
-            path: directory path to save scoring index
+            path: directory path to save model
         """
 
-        with open(path, "wb") as handle:
-            pickle.dump(self.__dict__, handle, protocol=__pickle__)
+        with open("%s/scoring" % path, "wb") as handle:
+            pickle.dump(self.__dict__, handle, protocol=pickle.HIGHEST_PROTOCOL)
 
-    def computefreq(self, tokens):
-        """
-        Computes token frequency.
-
-        Args:
-            tokens: input tokens
-
-        Returns:
-            {token: count}
-        """
-
-        return Counter(tokens)
-
-    def computeidf(self, freq):
+    def computeIDF(self, freq):
         """
         Computes an idf score for word frequency.
 
@@ -326,7 +153,7 @@ class Scoring:
             idf score
         """
 
-        return math.log((self.total + 1) / (freq + 1)) + 1
+        return math.log(self.total / (1 + freq))
 
     # pylint: disable=W0613
     def score(self, freq, idf, length):
@@ -342,4 +169,4 @@ class Scoring:
             token score
         """
 
-        return idf * math.sqrt(freq) * (1 / math.sqrt(length))
+        return idf

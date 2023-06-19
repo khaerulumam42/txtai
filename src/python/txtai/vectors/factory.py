@@ -2,8 +2,9 @@
 Factory module
 """
 
-from .external import ExternalVectors
-from .transformers import TransformersVectors
+import os
+
+# from .transformers import TransformersVectors
 from .words import WordVectors, WORDS
 
 
@@ -27,9 +28,6 @@ class VectorsFactory:
 
         # Determine vector method
         method = VectorsFactory.method(config)
-        if method == "external":
-            return ExternalVectors(config, scoring)
-
         if method == "words":
             if not WORDS:
                 # Raise error if trying to create Word Vectors without similarity extra
@@ -39,9 +37,7 @@ class VectorsFactory:
                 )
 
             return WordVectors(config, scoring)
-
-        # Default to TransformersVectors when configuration available
-        return TransformersVectors(config, scoring) if config and "path" in config else None
+        raise Exception('on original repo, this return as TransformersVectors')
 
     @staticmethod
     def method(config):
@@ -55,15 +51,12 @@ class VectorsFactory:
             vector method
         """
 
-        # Determine vector type (external, transformers or words)
+        # Determine vector type (words or transformers)
         method = config.get("method")
         path = config.get("path")
 
         # Infer method from path, if blank
-        if not method:
-            if path:
-                method = "words" if WordVectors.isdatabase(path) else "transformers"
-            elif config.get("transform"):
-                method = "external"
+        if not method and path:
+            method = "words" if os.path.isfile(path) else "transformers"
 
         return method

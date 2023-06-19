@@ -9,33 +9,27 @@ from .sif import SIF
 
 class ScoringFactory:
     """
-    Methods to create Scoring indexes.
+    Methods to create Scoring models.
     """
 
     @staticmethod
-    def create(config):
+    def create(method):
         """
-        Factory method to construct a Scoring instance.
+        Factory method to construct a Scoring object.
 
         Args:
-            config: scoring configuration parameters - supports bm25, sif, tfidf
+            method: scoring method (bm25, sif, tfidf)
 
         Returns:
             Scoring
         """
 
-        # Support string and dict configuration
-        if isinstance(config, str):
-            config = {"method": config}
-
-        method = config.get("method") if config else None
-
         if method == "bm25":
-            return BM25(config)
+            return BM25()
         if method == "sif":
-            return SIF(config)
+            return SIF()
         if method == "tfidf":
-            # Default scoring class implements tf-idf
-            return Scoring(config)
+            # Default scoring object implements tf-idf
+            return Scoring()
 
         return None

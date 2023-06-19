@@ -12,13 +12,12 @@ class WorkflowFactory:
     """
 
     @staticmethod
-    def create(config, name):
+    def create(config):
         """
         Creates a new Workflow instance.
 
         Args:
             config: Workflow configuration
-            name: Workflow name
 
         Returns:
             Workflow
@@ -32,11 +31,5 @@ class WorkflowFactory:
 
         config["tasks"] = tasks
 
-        if "stream" in config:
-            sconfig = config["stream"]
-            task = sconfig.pop("task") if "task" in sconfig else "stream"
-
-            config["stream"] = TaskFactory.create(sconfig, task)
-
         # Create workflow
-        return Workflow(**config, name=name)
+        return Workflow(**config)

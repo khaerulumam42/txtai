@@ -1,12 +1,10 @@
 """
-Documents module
+Stream module
 """
 
 import os
 import pickle
 import tempfile
-
-from .. import __pickle__
 
 
 class Documents:
@@ -16,19 +14,11 @@ class Documents:
 
     def __init__(self):
         """
-        Creates a new documents stream.
+        Creates a new DocumentStream.
         """
 
         self.documents = None
         self.batch = 0
-        self.size = 0
-
-    def __len__(self):
-        """
-        Returns total number of queued documents.
-        """
-
-        return self.size
 
     def __iter__(self):
         """
@@ -59,14 +49,12 @@ class Documents:
         """
 
         # Create documents file if not already open
-        # pylint: disable=R1732
         if not self.documents:
             self.documents = tempfile.NamedTemporaryFile(mode="wb", suffix=".docs", delete=False)
 
         # Add batch
-        pickle.dump(documents, self.documents, protocol=__pickle__)
+        pickle.dump(documents, self.documents)
         self.batch += 1
-        self.size += len(documents)
 
         return documents
 
@@ -81,4 +69,3 @@ class Documents:
         # Reset document parameters
         self.documents = None
         self.batch = 0
-        self.size = 0

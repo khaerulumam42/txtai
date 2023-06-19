@@ -25,55 +25,39 @@ class StorageTask(Task):
     PREFIX = r"(\w+):\/\/.*"
     PATH = r"\w+:\/\/(.*)"
 
-    def register(self, key=None, secret=None, host=None, port=None, token=None, region=None):
-        """
-        Checks if required dependencies are installed. Reads in cloud storage parameters.
-
-        Args:
-            key: provider-specific access key
-            secret: provider-specific access secret
-            host: server host name
-            port: server port
-            token: temporary session token
-            region: storage region
-        """
-
+    def __init__(self, action=None, select=None, unpack=True, ids=True):
         if not LIBCLOUD:
             raise ImportError('StorageTask is not available - install "workflow" extra to enable')
 
-        # pylint: disable=W0201
-        self.key = key
-        self.secret = secret
-        self.host = host
-        self.port = port
-        self.token = token
-        self.region = region
+        super().__init__(action, select, unpack)
 
-    def __call__(self, elements, executor=None):
-        # Create aggregated directory listing for all elements
-        outputs = []
-        for element in elements:
-            if self.matches(element):
-                # Get directory listing and run actions
-                outputs.extend(super().__call__(self.list(element), executor))
-            else:
-                outputs.append(element)
+        # If true, elements returned will be tagged with ids and converted into (id, data, tag) tuples
+        self.ids = ids
 
-        return outputs
-
-    def matches(self, element):
-        """
-        Determines if this element is a storage element.
-
-        Args:
-            element: input storage element
-
-        Returns:
-            True if this is a storage element
-        """
-
+    def accept(self, element):
         # Only accept file URLs
-        return re.match(StorageTask.PREFIX, self.upack(element, True).lower())
+        return super().accept(element) and re.match(StorageTask.PREFIX, element.lower())
+
+    def execute(self, elements):
+        # List contents of each bucket
+        buckets = [self.list(element) for element in elements]
+
+        elements = []
+        for bucket in buckets:
+            # Execute actions
+            content = super().execute(bucket)
+
+            # Combine with content ids if necessary
+            if self.ids:
+                values = []
+                for x, url in enumerate(bucket):
+                    values.append((url, content[x], None))
+            else:
+                values = content
+
+            elements.append(values)
+
+        return elements
 
     def list(self, element):
         """
@@ -91,18 +75,8 @@ class StorageTask(Task):
 
         key, container = os.path.dirname(path), os.path.basename(path)
 
-        # Get driver for provider
-        driver = get_driver(provider)
+        client = get_driver(provider)
+        driver = client(key)
 
-        # Get client connection
-        client = driver(
-            key if key else self.key if self.key else os.environ.get("ACCESS_KEY"),
-            self.secret if self.secret else os.environ.get("ACCESS_SECRET"),
-            host=self.host,
-            port=self.port,
-            token=self.token,
-            region=self.region,
-        )
-
-        container = client.get_container(container_name=container)
-        return [client.get_object_cdn_url(obj) for obj in client.list_container_objects(container=container)]
+        container = driver.get_container(container_name=container)
+        return [driver.get_object_cdn_url(obj) for obj in driver.list_container_objects(container=container)]

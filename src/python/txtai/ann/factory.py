@@ -2,24 +2,20 @@
 Factory module
 """
 
-from ..util import Resolver
-
-from .annoy import Annoy
+from .annoy import Annoy, ANNOY
 from .faiss import Faiss
-from .hnsw import HNSW
-from .numpy import NumPy
-from .torch import Torch
+from .hnsw import HNSW, HNSWLIB
 
 
 class ANNFactory:
     """
-    Methods to create ANN indexes.
+    Methods to create ANN models.
     """
 
     @staticmethod
     def create(config):
         """
-        Create an ANN.
+        Create an ANN model.
 
         Args:
             config: index configuration parameters
@@ -28,43 +24,25 @@ class ANNFactory:
             ANN
         """
 
-        # ANN instance
-        ann = None
+        # ANN model
+        model = None
         backend = config.get("backend", "faiss")
 
         # Create ANN instance
         if backend == "annoy":
-            ann = Annoy(config)
-        elif backend == "faiss":
-            ann = Faiss(config)
+            if not ANNOY:
+                raise ImportError('annoy library is not available - install "similarity" extra to enable')
+
+            model = Annoy(config)
         elif backend == "hnsw":
-            ann = HNSW(config)
-        elif backend == "numpy":
-            ann = NumPy(config)
-        elif backend == "torch":
-            ann = Torch(config)
+            if not HNSWLIB:
+                raise ImportError('hnswlib library is not available - install "similarity" extra to enable')
+
+            model = HNSW(config)
         else:
-            ann = ANNFactory.resolve(backend, config)
+            model = Faiss(config)
 
         # Store config back
         config["backend"] = backend
 
-        return ann
-
-    @staticmethod
-    def resolve(backend, config):
-        """
-        Attempt to resolve a custom backend.
-
-        Args:
-            backend: backend class
-            config: index configuration parameters
-
-        Returns:
-            ANN
-        """
-
-        try:
-            return Resolver()(backend)(config)
-        except Exception as e:
-            raise ImportError(f"Unable to resolve ann backend: '{backend}'") from e
+        return model

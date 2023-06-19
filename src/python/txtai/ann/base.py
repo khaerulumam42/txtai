@@ -1,46 +1,34 @@
 """
-ANN (Approximate Nearest Neighbor) module
+ANN (Approximate Nearest Neighbors) module
 """
-
-import datetime
-import platform
-
-from .. import __version__
 
 
 class ANN:
     """
-    Base class for ANN instances. This class builds vector indexes to support similarity search.
-    The built-in ANN backends store ids and vectors. Content storage is supported via database instances.
+    Base class for ANN models.
     """
 
     def __init__(self, config):
         """
-        Creates a new ANN.
-
-        Args:
-            config: index configuration parameters
+        Creates a new ANN model.
         """
 
         # ANN index
-        self.backend = None
+        self.model = None
 
-        # ANN configuration
+        # Model configuration
         self.config = config
 
     def load(self, path):
         """
-        Loads an ANN at path.
-
-        Args:
-            path: path to load ann index
+        Loads an ANN model at path.
         """
 
         raise NotImplementedError
 
     def index(self, embeddings):
         """
-        Builds an ANN index.
+        Builds an ANN model.
 
         Args:
             embeddings: embeddings array
@@ -50,7 +38,7 @@ class ANN:
 
     def append(self, embeddings):
         """
-        Append elements to an existing index.
+        Append elements to an existing model.
 
         Args:
             embeddings: embeddings array
@@ -60,7 +48,7 @@ class ANN:
 
     def delete(self, ids):
         """
-        Deletes elements from existing index.
+        Deletes elements from existing model.
 
         Args:
             ids: ids to delete
@@ -70,7 +58,7 @@ class ANN:
 
     def search(self, queries, limit):
         """
-        Searches ANN index for query. Returns topn results.
+        Searches ANN model for query. Returns topn results.
 
         Args:
             queries: queries array
@@ -84,7 +72,7 @@ class ANN:
 
     def count(self):
         """
-        Number of elements in the ANN index.
+        Number of elements in the ANN model.
 
         Returns:
             count
@@ -94,10 +82,7 @@ class ANN:
 
     def save(self, path):
         """
-        Saves an ANN index at path.
-
-        Args:
-            path: path to save ann index
+        Saves an ANN model at path.
         """
 
         raise NotImplementedError
@@ -120,27 +105,3 @@ class ANN:
         # Get setting value, set default value if not found
         setting = backend.get(name) if backend else None
         return setting if setting else default
-
-    def metadata(self, settings=None):
-        """
-        Adds index build metadata.
-
-        Args:
-            settings: index build settings
-        """
-
-        # ISO 8601 timestamp
-        create = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
-
-        # Set build metadata if this is not an update
-        if settings:
-            self.config["build"] = {
-                "create": create,
-                "python": platform.python_version(),
-                "settings": settings,
-                "system": f"{platform.system()} ({platform.machine()})",
-                "txtai": __version__,
-            }
-
-        # Set last update date
-        self.config["update"] = create

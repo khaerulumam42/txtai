@@ -10,16 +10,11 @@ class SIF(Scoring):
     Smooth Inverse Frequency (SIF) scoring.
     """
 
-    def __init__(self, config=None):
-        super().__init__(config)
+    def __init__(self, a=0.001):
+        super().__init__()
 
         # SIF configurable parameters
-        self.a = self.config.get("a", 1e-3)
-
-    def computefreq(self, tokens):
-        # Default method computes frequency for a single entry
-        # SIF uses word probabilities across entire index
-        return self.wordfreq
+        self.a = a
 
     def score(self, freq, idf, length):
         # Calculate SIF score
